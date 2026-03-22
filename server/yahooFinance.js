@@ -1,139 +1,140 @@
 /**
- * yahooFinance.js — versione stabile con rate limiting
- * Una sola sessione condivisa, rinnovata ogni 5 minuti.
- * Pausa minima di 1.5s tra richieste per evitare 401.
+ * yahooFinance.js — Alpha Vantage API
+ * Funziona su server cloud senza problemi di cookie/crumb.
+ * Piano gratuito: 25 chiamate/minuto, 250 chiamate/giorno.
+ *
+ * Strategia per restare nei limiti:
+ * - Una sola chiamata per asset (quote + candles separate)
+ * - Pausa minima 3s tra richieste (max 20/min sicuri)
+ * - Candles: aggiornate ogni 10 minuti per risparmiare chiamate
+ *   (le quote si aggiornano ad ogni ciclo, le candles solo se vecchie)
  */
+
 const axios = require('axios');
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-const REFERER = 'https://finance.yahoo.com/';
+const AV_KEY   = process.env.AV_KEY || 'IO3JP5GHOPI8G32S';
+const BASE_URL = 'https://www.alphavantage.co/query';
+const MIN_GAP  = 3000; // 3s tra richieste → max 20/min
 
-let cookie    = '';
-let crumb     = '';
-let sessionAt = 0;
-const TTL     = 5 * 60 * 1000; // 5 minuti
-
-// Ultima richiesta — rispetta il rate limit
 let lastRequest = 0;
-const MIN_GAP   = 1500; // ms tra richieste
 
-async function wait(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+// Cache candles per non riscaricarle ad ogni ciclo
+const candleCache = {};
+const CANDLE_TTL  = 10 * 60 * 1000; // 10 minuti
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function rateLimit() {
   const gap = Date.now() - lastRequest;
-  if (gap < MIN_GAP) await wait(MIN_GAP - gap);
+  if (gap < MIN_GAP) await sleep(MIN_GAP - gap);
   lastRequest = Date.now();
 }
 
-async function initSession(force = false) {
-  if (!force && crumb && Date.now() - sessionAt < TTL) return;
-  try {
-    // Cookie
-    const r1 = await axios.get('https://fc.yahoo.com', {
-      headers: { 'User-Agent': UA, 'Referer': REFERER },
-      validateStatus: () => true, timeout: 8000, maxRedirects: 5,
-    });
-    cookie = (r1.headers['set-cookie'] ?? []).map(c => c.split(';')[0]).join('; ');
-
-    await wait(500);
-
-    // Crumb
-    const r2 = await axios.get('https://query2.finance.yahoo.com/v1/test/getcrumb', {
-      headers: { 'User-Agent': UA, 'Referer': REFERER, 'Cookie': cookie },
-      validateStatus: () => true, timeout: 8000,
-    });
-    const c = String(r2.data ?? '').trim();
-    if (c && c.length < 30 && !c.includes('<')) {
-      crumb     = c;
-      sessionAt = Date.now();
-      console.log(`[Yahoo] Sessione rinnovata — crumb: ${crumb.slice(0,6)}…`);
-    } else {
-      throw new Error('Crumb non valido: ' + c.slice(0, 30));
-    }
-  } catch (e) {
-    console.error('[Yahoo] Errore sessione:', e.message);
-    throw e;
-  }
+async function avGet(params) {
+  await rateLimit();
+  const res = await axios.get(BASE_URL, {
+    params: { ...params, apikey: AV_KEY },
+    timeout: 12000,
+  });
+  // Alpha Vantage restituisce errori nel body, non nello status
+  if (res.data?.['Error Message']) throw new Error(res.data['Error Message']);
+  if (res.data?.['Note'])          throw new Error('Rate limit Alpha Vantage: ' + res.data['Note']);
+  if (res.data?.['Information'])   throw new Error('Limite piano gratuito: ' + res.data['Information']);
+  return res.data;
 }
 
-// Fetch combinato: quote + candles in un'unica chiamata chart
-async function fetchAll(symbol, interval = '1m', count = 60) {
-  await initSession();
-  await rateLimit();
+// ─── Quote real-time ──────────────────────────────────────────────────────────
+async function fetchQuote(symbol) {
+  // Alpha Vantage usa simboli senza suffissi per futures — mappatura
+  const avSymbol = mapSymbol(symbol);
 
-  const enc  = encodeURIComponent(symbol);
-  const now  = Math.floor(Date.now() / 1000);
-  const from = now - 2 * 24 * 60 * 60;
+  const data = await avGet({
+    function: 'GLOBAL_QUOTE',
+    symbol:   avSymbol,
+  });
 
-  let data;
-  try {
-    const res = await axios.get(
-      `https://query2.finance.yahoo.com/v8/finance/chart/${enc}?period1=${from}&period2=${now}&interval=${interval}&crumb=${encodeURIComponent(crumb)}`,
-      {
-        headers: { 'User-Agent': UA, 'Referer': REFERER, 'Cookie': cookie },
-        timeout: 10000,
-      }
-    );
-    data = res.data;
-  } catch (e) {
-    if (e.response?.status === 401 || e.response?.status === 403) {
-      console.log(`[Yahoo] 401 su ${symbol} — rinnovo sessione…`);
-      await initSession(true);
-      await rateLimit();
-      const res2 = await axios.get(
-        `https://query2.finance.yahoo.com/v8/finance/chart/${enc}?period1=${from}&period2=${now}&interval=${interval}&crumb=${encodeURIComponent(crumb)}`,
-        {
-          headers: { 'User-Agent': UA, 'Referer': REFERER, 'Cookie': cookie },
-          timeout: 10000,
-        }
-      );
-      data = res2.data;
-    } else {
-      throw e;
-    }
-  }
+  const q = data['Global Quote'];
+  if (!q || !q['05. price']) throw new Error(`No quote data for ${symbol}`);
 
-  const chart = data?.chart?.result?.[0];
-  if (!chart) throw new Error(`No chart data for ${symbol}`);
+  const price    = parseFloat(q['05. price']);
+  const prevClose= parseFloat(q['08. previous close']);
+  const change   = parseFloat(q['09. change']);
+  const changePct= parseFloat(q['10. change percent']?.replace('%',''));
+  const volume   = parseInt(q['06. volume']) || 0;
+  const open     = parseFloat(q['02. open']);
+  const high     = parseFloat(q['03. high']);
+  const low      = parseFloat(q['04. low']);
 
-  // Meta da chart
-  const meta  = chart.meta ?? {};
-  const price = meta.regularMarketPrice ?? meta.chartPreviousClose ?? null;
-  if (!price) throw new Error(`No price for ${symbol}`);
-
-  const quote = {
-    symbol,
-    price,
-    change:    meta.regularMarketPrice && meta.chartPreviousClose
-                 ? +(meta.regularMarketPrice - meta.chartPreviousClose).toFixed(4) : 0,
-    changePct: meta.regularMarketPrice && meta.chartPreviousClose
-                 ? +((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose * 100).toFixed(2) : 0,
-    volume:    meta.regularMarketVolume ?? 0,
-    open:      meta.regularMarketOpen   ?? price,
-    high:      meta.regularMarketDayHigh ?? price,
-    low:       meta.regularMarketDayLow  ?? price,
-    prevClose: meta.chartPreviousClose   ?? price,
-    bid:       null, ask: null, spread: null,
+  return {
+    symbol, price, change, changePct, volume,
+    open, high, low, prevClose,
+    bid: null, ask: null, spread: null,
     timestamp: Date.now(),
   };
+}
 
-  // Candles
-  const ts = chart.timestamp ?? [];
-  const q  = chart.indicators?.quote?.[0] ?? {};
-  const candles = ts
-    .map((t, i) => ({
-      time:   t * 1000,
-      open:   q.open?.[i]   ?? q.close?.[i] ?? price,
-      high:   q.high?.[i]   ?? q.close?.[i] ?? price,
-      low:    q.low?.[i]    ?? q.close?.[i] ?? price,
-      close:  q.close?.[i]  ?? price,
-      volume: q.volume?.[i] ?? 0,
+// ─── Candles OHLCV — TIME_SERIES_INTRADAY ────────────────────────────────────
+async function fetchCandles(symbol, interval = '1min', count = 60) {
+  const avSymbol = mapSymbol(symbol);
+  const cacheKey = `${avSymbol}_${interval}`;
+  const cached   = candleCache[cacheKey];
+
+  // Usa la cache se fresca
+  if (cached && Date.now() - cached.ts < CANDLE_TTL) {
+    return cached.candles;
+  }
+
+  const data = await avGet({
+    function:        'TIME_SERIES_INTRADAY',
+    symbol:          avSymbol,
+    interval:        interval,
+    outputsize:      'compact', // ultime 100 candele
+    adjusted:        'true',
+  });
+
+  const key     = `Time Series (${interval})`;
+  const series  = data[key];
+  if (!series) throw new Error(`No candle data for ${symbol}`);
+
+  const candles = Object.entries(series)
+    .map(([time, v]) => ({
+      time:   new Date(time).getTime(),
+      open:   parseFloat(v['1. open']),
+      high:   parseFloat(v['2. high']),
+      low:    parseFloat(v['3. low']),
+      close:  parseFloat(v['4. close']),
+      volume: parseInt(v['5. volume']) || 0,
     }))
-    .filter(c => c.close != null)
+    .sort((a, b) => a.time - b.time)
     .slice(-count);
 
+  // Salva in cache
+  candleCache[cacheKey] = { ts: Date.now(), candles };
+  return candles;
+}
+
+// ─── Mappatura simboli Yahoo → Alpha Vantage ──────────────────────────────────
+// Alpha Vantage non supporta futures (=F) né alcuni simboli speciali
+function mapSymbol(symbol) {
+  const map = {
+    'GC=F':  'GLD',   // Oro → Gold ETF
+    'SI=F':  'SLV',   // Argento → Silver ETF
+    'CL=F':  'USO',   // Petrolio WTI → Oil ETF
+    'BZ=F':  'USO',   // Brent → Oil ETF
+    'NG=F':  'UNG',   // Gas naturale → Natural Gas ETF
+    'HG=F':  'COPX',  // Rame → Copper ETF
+    'BRK-B': 'BRK-B', // Berkshire — supportato
+  };
+  return map[symbol] || symbol;
+}
+
+// ─── fetchAll — chiamata combinata usata dal server ───────────────────────────
+async function fetchAll(symbol, interval = '1min', count = 60) {
+  // Per i futures usiamo l'ETF mappato sia per quote che candles
+  const [quote, candles] = await Promise.all([
+    fetchQuote(symbol),
+    fetchCandles(symbol, interval, count),
+  ]);
   return { quote, candles };
 }
 
