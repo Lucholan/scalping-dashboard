@@ -331,7 +331,8 @@ let ws;
 function connectWS(){
   const pill=document.getElementById('wsPill');
   pill.textContent='…'; pill.className='ws-pill ws-wait';
-  ws=new WebSocket('ws://localhost:3000');
+  const wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws=new WebSocket(wsProto + '//' + location.host);
   ws.onopen=()=>{pill.textContent='Live';pill.className='ws-pill ws-on';};
   ws.onmessage=(e)=>{try{const m=JSON.parse(e.data);if(m.type==='asset_update')onUpdate(m);}catch(ex){}};
   ws.onclose=()=>{pill.textContent='Offline';pill.className='ws-pill ws-off';setTimeout(connectWS,3000);};
