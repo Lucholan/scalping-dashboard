@@ -5,7 +5,7 @@
 
 const axios = require('axios');
 
-const AV_KEY   = process.env.AV_KEY;
+const AV_KEY   = process.env.AV_KEY || process.env.ALPHA_KEY || 'QRPN1LVOGD3OD1J7';
 const BASE_URL = 'https://www.alphavantage.co/query';
 if (!AV_KEY) throw new Error('AV_KEY mancante — configurare la variabile su Railway');
 console.log('[AV] Chiave caricata:', AV_KEY.slice(0,4) + '****');
