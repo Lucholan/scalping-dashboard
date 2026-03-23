@@ -44,6 +44,12 @@ function broadcastMarketStatus(status) {
 }
 
 // ─── DST e orari mercato ──────────────────────────────────────────────────────
+// Orari attivi (ora New York):
+//   Pre-market ridotto:  08:30–09:30 NY  (1 ora prima apertura)
+//   Mercato regolare:    09:30–16:00 NY
+//   After-hours ridotto: 16:00–17:00 NY  (1 ora dopo chiusura)
+//   Totale: ~8.5 ore al giorno
+
 function isNYDST(date) {
   const year = date.getUTCFullYear();
   const march = new Date(Date.UTC(year, 2, 1));
@@ -57,22 +63,47 @@ function marketStatus() {
   const now    = new Date();
   const dst    = isNYDST(now);
   const offset = dst ? 4 : 5;
+
+  // Ora New York
   const nyDate = new Date(now.getTime() - offset * 3600000);
   const nyDay  = nyDate.getUTCDay();
   const nyMin  = nyDate.getUTCHours() * 60 + nyDate.getUTCMinutes();
+
+  // Ora italiana per i messaggi
   const itOff  = (now.getUTCMonth() >= 2 && now.getUTCMonth() <= 9) ? 2 : 1;
   const itH    = (now.getUTCHours() + itOff) % 24;
   const itTime = `${itH.toString().padStart(2,'0')}:${now.getUTCMinutes().toString().padStart(2,'0')}`;
 
+  // Orari in minuti NY
+  // 08:30 NY = 510 min  → pre-market inizia
+  // 09:30 NY = 570 min  → apertura NYSE
+  // 16:00 NY = 960 min  → chiusura NYSE
+  // 17:00 NY = 1020 min → fine after-hours ridotto
+
+  // Calcola ora apertura/chiusura in ora italiana per i messaggi
+  const preOpenIT  = dst ? '13:30' : '14:30'; // 08:30 NY
+  const openIT     = dst ? '14:30' : '15:30'; // 09:30 NY
+  const closeIT    = dst ? '21:00' : '22:00'; // 16:00 NY
+  const afterEndIT = dst ? '22:00' : '23:00'; // 17:00 NY
+
+  // Weekend
   if (nyDay === 0 || nyDay === 6)
-    return { open: false, reason: `Weekend — mercati chiusi (${itTime} ora italiana)` };
-  if (nyMin >= 240 && nyMin < 570)
-    return { open: true, reason: `Pre-market USA (${itTime} ora italiana)`, premarket: true };
+    return { open: false, reason: `Weekend — riprende lunedì alle ${preOpenIT} ora italiana` };
+
+  // Pre-market ridotto: 08:30–09:30 NY
+  if (nyMin >= 510 && nyMin < 570)
+    return { open: true, reason: `Pre-market (${itTime} ora italiana)`, premarket: true };
+
+  // Mercato regolare: 09:30–16:00 NY
   if (nyMin >= 570 && nyMin < 960)
     return { open: true, reason: `NYSE/Nasdaq aperto (${itTime} ora italiana)` };
-  if (nyMin >= 960 && nyMin < 1200)
-    return { open: true, reason: `After-hours USA (${itTime} ora italiana)`, afterhours: true };
-  return { open: false, reason: `Mercati chiusi — pre-market alle ${dst ? 10 : 9}:00 ora italiana` };
+
+  // After-hours ridotto: 16:00–17:00 NY
+  if (nyMin >= 960 && nyMin < 1020)
+    return { open: true, reason: `After-hours (${itTime} ora italiana)`, afterhours: true };
+
+  // Tutto il resto — pausa
+  return { open: false, reason: `Mercati chiusi — riprende alle ${preOpenIT} ora italiana` };
 }
 
 // ─── Loop principale SEQUENZIALE — un solo asset alla volta ──────────────────
@@ -104,7 +135,7 @@ async function mainLoop() {
       console.error(`Error ${sym}: ${err.message?.slice(0,80)}`);
     }
 
-    await sleep(8000); // 8s tra ogni asset → max 7.5/min, ~270/giorno
+    await sleep(1000); // 1s tra ogni asset → ciclo 12s, max 60/min — ok con Alpaca (limite 200/min)
   }
 }
 
