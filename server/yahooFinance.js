@@ -5,8 +5,10 @@
 
 const axios = require('axios');
 
-const AV_KEY   = process.env.AV_KEY || 'IO3JP5GHOPI8G32S';
+const AV_KEY   = process.env.AV_KEY;
 const BASE_URL = 'https://www.alphavantage.co/query';
+if (!AV_KEY) throw new Error('AV_KEY mancante — configurare la variabile su Railway');
+console.log('[AV] Chiave caricata:', AV_KEY.slice(0,4) + '****');
 const MIN_GAP  = 5000; // 5s tra chiamate
 
 const priceSeries = {};
