@@ -14,60 +14,21 @@ const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
 
 const ASSETS = {
-  'AAPL':  { name:'Apple',              type:'stock',     region:'USA' },
-  'MSFT':  { name:'Microsoft',          type:'stock',     region:'USA' },
-  'NVDA':  { name:'NVIDIA',             type:'stock',     region:'USA' },
-  'TSLA':  { name:'Tesla',              type:'stock',     region:'USA' },
-  'AMZN':  { name:'Amazon',             type:'stock',     region:'USA' },
-  'GOOGL': { name:'Alphabet',           type:'stock',     region:'USA' },
-  'META':  { name:'Meta Platforms',     type:'stock',     region:'USA' },
-  'JPM':   { name:'JPMorgan Chase',     type:'stock',     region:'USA' },
-  'BAC':   { name:'Bank of America',    type:'stock',     region:'USA' },
-  'V':     { name:'Visa',               type:'stock',     region:'USA' },
-  'WMT':   { name:'Walmart',            type:'stock',     region:'USA' },
-  'XOM':   { name:'ExxonMobil',         type:'stock',     region:'USA' },
-  'BRK-B': { name:'Berkshire Hathaway', type:'stock',     region:'USA' },
-  'JNJ':   { name:'Johnson & Johnson',  type:'stock',     region:'USA' },
-  'PG':    { name:'Procter & Gamble',   type:'stock',     region:'USA' },
-  'MA':    { name:'Mastercard',         type:'stock',     region:'USA' },
-  'HD':    { name:'Home Depot',         type:'stock',     region:'USA' },
-  'CVX':   { name:'Chevron',            type:'stock',     region:'USA' },
-  'ABBV':  { name:'AbbVie',             type:'stock',     region:'USA' },
-  'AMD':   { name:'AMD',                type:'stock',     region:'USA' },
-  'INTC':  { name:'Intel',              type:'stock',     region:'USA' },
-  'NFLX':  { name:'Netflix',            type:'stock',     region:'USA' },
-  'DIS':   { name:'Walt Disney',        type:'stock',     region:'USA' },
-  'PYPL':  { name:'PayPal',             type:'stock',     region:'USA' },
-  'AVGO':  { name:'Broadcom',           type:'stock',     region:'USA' },
-  'CRM':   { name:'Salesforce',         type:'stock',     region:'USA' },
-  'PEP':   { name:'PepsiCo',            type:'stock',     region:'USA' },
-  'KO':    { name:'Coca-Cola',          type:'stock',     region:'USA' },
-  'UNH':   { name:'UnitedHealth',       type:'stock',     region:'USA' },
-  'MRK':   { name:'Merck',              type:'stock',     region:'USA' },
-  'SPY':   { name:'S&P 500 ETF',        type:'etf',       region:'USA' },
-  'QQQ':   { name:'Nasdaq 100 ETF',     type:'etf',       region:'USA' },
-  'DIA':   { name:'Dow Jones ETF',      type:'etf',       region:'USA' },
-  'IWM':   { name:'Russell 2000 ETF',   type:'etf',       region:'USA' },
-  'XLK':   { name:'Tech Select',        type:'etf',       region:'USA' },
-  'XLF':   { name:'Financial Select',   type:'etf',       region:'USA' },
-  'XLE':   { name:'Energy Select',      type:'etf',       region:'USA' },
-  'XLV':   { name:'Health Care',        type:'etf',       region:'USA' },
-  'XLI':   { name:'Industrial Select',  type:'etf',       region:'USA' },
-  'XLY':   { name:'Consumer Discret.',  type:'etf',       region:'USA' },
-  'XLP':   { name:'Consumer Staples',   type:'etf',       region:'USA' },
-  'SOXX':  { name:'Semiconductors ETF', type:'etf',       region:'USA' },
-  'ARKK':  { name:'ARK Innovation',     type:'etf',       region:'USA' },
-  'VTI':   { name:'Vanguard Total US',  type:'etf',       region:'USA' },
-  'GC=F':  { name:'Oro Futures',        type:'commodity', region:'Globale' },
-  'SI=F':  { name:'Argento Futures',    type:'commodity', region:'Globale' },
-  'CL=F':  { name:'Petrolio WTI',       type:'commodity', region:'Globale' },
-  'BZ=F':  { name:'Petrolio Brent',     type:'commodity', region:'Globale' },
-  'NG=F':  { name:'Gas Naturale',       type:'commodity', region:'Globale' },
-  'HG=F':  { name:'Rame Futures',       type:'commodity', region:'Globale' },
-  'GLD':   { name:'Gold ETF',           type:'etf',       region:'Globale' },
-  'SLV':   { name:'Silver ETF',         type:'etf',       region:'Globale' },
-  'USO':   { name:'Oil ETF',            type:'etf',       region:'Globale' },
-  'DBA':   { name:'Agricoltura ETF',    type:'etf',       region:'Globale' },
+  // ── USA ────────────────────────────────────────────────────────────────
+  'NVDA':  { name:'NVIDIA',                  type:'stock', region:'USA' },
+  'GOOGL': { name:'Alphabet',                type:'stock', region:'USA' },
+  'PLTR':  { name:'Palantir',                type:'stock', region:'USA' },
+  'TSM':   { name:'Taiwan Semiconductor',    type:'stock', region:'USA' },
+  'ORCL':  { name:'Oracle',                  type:'stock', region:'USA' },
+  'SMCI':  { name:'Super Micro Computer',    type:'stock', region:'USA' },
+  'SNDK':  { name:'SanDisk (WD)',            type:'stock', region:'USA' },
+  'RKLB':  { name:'Rocket Lab',              type:'stock', region:'USA' },
+  'SOFI':  { name:'SoFi Technologies',       type:'stock', region:'USA' },
+  'MU':    { name:'Micron Technology',       type:'stock', region:'USA' },
+  // ── Brasile ────────────────────────────────────────────────────────────
+  'NU':    { name:'Nu Holdings (Nubank)',     type:'stock', region:'Brasile' },
+  // ── Argentina ──────────────────────────────────────────────────────────
+  'MELI':  { name:'MercadoLibre',            type:'stock', region:'Argentina' },
 };
 
 const state   = {};
@@ -159,7 +120,7 @@ setInterval(async () => {
   const sym = symbols[idx % symbols.length];
   idx++;
   await refreshAsset(sym);
-}, 5500); // 5.5s tra asset → ~5 min ciclo completo, max 11/min
+}, 10000); // 10s tra asset → 3 asset ogni 30s, ~6 req/min, ~90 req/giorno
 
 // ─── Avvio ────────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 3000;
