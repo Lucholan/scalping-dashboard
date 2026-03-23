@@ -36,37 +36,71 @@ const symbols = Object.keys(ASSETS);
 for (const s of symbols) state[s] = { quote:null, candles:[], indicators:null, signal:null };
 
 // ─── Orari di mercato USA (NYSE) ─────────────────────────────────────────────
-// Il server gira in UTC. NYSE apre 14:30 UTC, chiude 21:00 UTC
-// Pre-market: 09:00–14:30 UTC | After-hours: 21:00–01:00 UTC
+// NYSE apre 09:30 New York, chiude 16:00 New York
+// New York è UTC-5 (inverno) o UTC-4 (estate, dal secondo domenica marzo)
+// In UTC: apertura 14:30 UTC, chiusura 21:00 UTC — sempre fisso
+// Pre-market NYC: 04:00–09:30 NY = 09:00–14:30 UTC
+// After-hours NYC: 16:00–20:00 NY = 21:00–01:00 UTC
+
+function isNYDST(date) {
+  // DST USA: inizia seconda domenica di marzo, finisce prima domenica di novembre
+  const year = date.getUTCFullYear();
+
+  // Seconda domenica di marzo
+  const march = new Date(Date.UTC(year, 2, 1));
+  const marchDay = march.getUTCDay(); // 0=Dom
+  const dstStart = new Date(Date.UTC(year, 2, 8 + (7 - marchDay) % 7, 7)); // 02:00 NY = 07:00 UTC
+
+  // Prima domenica di novembre
+  const nov = new Date(Date.UTC(year, 10, 1));
+  const novDay = nov.getUTCDay();
+  const dstEnd = new Date(Date.UTC(year, 10, 1 + (7 - novDay) % 7, 6)); // 02:00 NY = 06:00 UTC
+
+  return date >= dstStart && date < dstEnd;
+}
+
 function marketStatus() {
-  const now  = new Date();
-  const day  = now.getUTCDay(); // 0=Dom, 6=Sab
-  const hour = now.getUTCHours();
-  const min  = now.getUTCMinutes();
-  const time = hour * 60 + min; // minuti dalla mezzanotte UTC
+  const now    = new Date();
+  const day    = now.getUTCDay(); // 0=Dom, 6=Sab
+  const dst    = isNYDST(now);
+  const offset = dst ? 4 : 5; // ore da sottrarre per avere ora NY
 
-  // Weekend — mercati chiusi
-  if (day === 0 || day === 6) {
-    return { open: false, reason: 'Weekend — mercati chiusi' };
+  // Ora New York in minuti dalla mezzanotte
+  const nyMinutes = ((now.getUTCHours() - offset + 24) % 24) * 60 + now.getUTCMinutes();
+
+  // Ora italiana per i messaggi (UTC+1 inverno, UTC+2 estate)
+  const itDST   = now.getUTCMonth() >= 2 && now.getUTCMonth() <= 9; // approssimazione
+  const itOffset = itDST ? 2 : 1;
+  const itHour  = (now.getUTCHours() + itOffset) % 24;
+  const itMin   = now.getUTCMinutes().toString().padStart(2,'0');
+  const itTime  = `${itHour.toString().padStart(2,'0')}:${itMin}`;
+
+  // Weekend NYSE (sabato e domenica ora NY)
+  // Calcola giorno NY
+  const nyDate = new Date(now.getTime() - offset * 3600000);
+  const nyDay  = nyDate.getUTCDay();
+  if (nyDay === 0 || nyDay === 6) {
+    return { open: false, reason: `Weekend — mercati chiusi (${itTime} ora italiana)` };
   }
 
-  // Pre-market (09:00–14:30 UTC = 11:00–16:30 ora italiana)
-  if (time >= 540 && time < 870) {
-    return { open: true, reason: 'Pre-market USA aperto', premarket: true };
+  // Pre-market (04:00–09:30 NY)
+  if (nyMinutes >= 240 && nyMinutes < 570) {
+    return { open: true, reason: `Pre-market USA (${itTime} ora italiana)`, premarket: true };
   }
 
-  // Mercato regolare (14:30–21:00 UTC = 16:30–23:00 ora italiana)
-  if (time >= 870 && time < 1260) {
-    return { open: true, reason: 'NYSE/Nasdaq aperto' };
+  // Mercato regolare (09:30–16:00 NY)
+  if (nyMinutes >= 570 && nyMinutes < 960) {
+    return { open: true, reason: `NYSE/Nasdaq aperto (${itTime} ora italiana)` };
   }
 
-  // After-hours (21:00–01:00 UTC)
-  if (time >= 1260 || time < 60) {
-    return { open: true, reason: 'After-hours USA', afterhours: true };
+  // After-hours (16:00–20:00 NY)
+  if (nyMinutes >= 960 && nyMinutes < 1200) {
+    return { open: true, reason: `After-hours USA (${itTime} ora italiana)`, afterhours: true };
   }
 
-  // Notte profonda — pausa
-  return { open: false, reason: 'Mercati chiusi — riprende alle 11:00 ora italiana' };
+  // Notte — pausa
+  const openItHour = dst ? 10 : 9; // pre-market 04:00 NY
+  return { open: false, reason: `Mercati chiusi — pre-market alle ${openItHour}:00 ora italiana` };
 }
 
 function broadcast(data) {
