@@ -101,8 +101,8 @@ html,body{background:var(--bg0);color:var(--text);font-family:'DM Mono',monospac
 .d-price-row{display:flex;align-items:baseline;gap:10px;margin-top:4px;}
 .d-price{font-family:'Syne',sans-serif;font-size:26px;font-weight:700;}
 .d-chg{font-size:13px;}
-.d-chart-wrap{flex:1;position:relative;padding:8px 12px 4px;}
-.d-chart-wrap canvas{position:absolute;inset:8px 12px 4px;}
+.d-chart-wrap{flex:1;position:relative;min-height:200px;padding:8px 12px 4px;}
+.d-chart-wrap canvas{position:absolute;top:8px;left:12px;right:12px;bottom:4px;width:calc(100% - 24px) !important;height:calc(100% - 12px) !important;}
 .d-kpi{display:grid;grid-template-columns:repeat(6,1fr);border-top:1px solid var(--border);}
 .kpi-cell{padding:7px 10px;border-right:1px solid var(--border);}
 .kpi-cell:last-child{border-right:none;}
@@ -209,7 +209,7 @@ html,body{background:var(--bg0);color:var(--text);font-family:'DM Mono',monospac
   .m-det-price{font-family:'Syne',sans-serif;font-size:32px;font-weight:700;margin-top:6px;}
   .m-det-chg{font-size:14px;margin-top:2px;}
   .m-chart-wrap{position:relative;height:220px;padding:8px 12px 4px;}
-  .m-chart-wrap canvas{position:absolute;inset:8px 12px 4px;}
+  .m-chart-wrap canvas{position:absolute;top:8px;left:12px;right:12px;bottom:4px;width:calc(100% - 24px) !important;height:calc(100% - 12px) !important;}
   .m-sig-section{padding:12px 14px;border-bottom:1px solid var(--border);}
   .m-sig-title{font-size:10px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin-bottom:8px;}
   .m-sig-box{border-radius:10px;padding:14px;}
@@ -652,14 +652,14 @@ function renderMDetail() {
       <button class="m-ai-btn" id="m-aiBtn" onclick="runAI('mobile')">Analizza con AI ▶</button>
     </div>`;
 
-  // Render chart after DOM update
+  // Render chart after DOM update - needs time for layout
   setTimeout(() => {
     const ctx = document.getElementById('m-chart');
     if (ctx && candles?.length) {
       if (mChartInst) { mChartInst.destroy(); mChartInst = null; }
       renderChart('m-chart', candles, quote.price, mChartInst, inst => mChartInst = inst);
     }
-  }, 50);
+  }, 150);
 }
 
 // ── Mobile signals ────────────────────────────────────────────────────────────
@@ -684,27 +684,85 @@ function renderMSignals() {
 }
 
 // ── Chart ─────────────────────────────────────────────────────────────────────
+function buildChartData(candles) {
+  return {
+    labels: candles.map(c => {
+      const d = new Date(c.time);
+      return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+    }),
+    datasets: [{
+      data: candles.map(c => [
+        Math.min(c.open ?? c.close, c.close),
+        Math.max(c.open ?? c.close, c.close)
+      ]),
+      backgroundColor: candles.map(c => (c.close??0) >= (c.open??c.close) ? 'rgba(0,230,118,.65)' : 'rgba(255,77,109,.65)'),
+      borderColor:     candles.map(c => (c.close??0) >= (c.open??c.close) ? '#00e676' : '#ff4d6d'),
+      borderWidth: 1,
+      borderSkipped: false,
+    }]
+  };
+}
+
+function buildChartOptions() {
+  return {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        backgroundColor: '#131720',
+        borderColor: 'rgba(255,255,255,.1)',
+        borderWidth: 1,
+        titleColor: '#5a6480',
+        bodyColor: '#e2e8f8',
+        callbacks: {
+          label: (ctx) => {
+            const c = ctx.chart.data._candles?.[ctx.dataIndex];
+            if (!c) return '';
+            return ` O:${c.open?.toFixed(2)} H:${c.high?.toFixed(2)} L:${c.low?.toFixed(2)} C:${c.close?.toFixed(2)}`;
+          }
+        }
+      }
+    },
+    scales: {
+      x: { ticks: { maxTicksLimit: 8, color: '#5a6480', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' } },
+      y: { ticks: { color: '#5a6480', font: { size: 9 }, callback: v => v.toFixed(2) }, grid: { color: 'rgba(255,255,255,.04)' }, position: 'right' }
+    }
+  };
+}
+
 function renderChart(canvasId, candles, lastPrice, instance, setInstance) {
   if (!candles?.length) return;
-  const ctx = document.getElementById(canvasId);
-  if (!ctx) return;
-  if (instance) { instance.destroy(); }
-  const isUp = lastPrice >= (candles[0]?.close ?? lastPrice);
-  const col  = isUp ? '#00e676' : '#ff4d6d';
-  const inst = new Chart(ctx.getContext('2d'), {
-    type: 'bar',
-    data: { labels: candles.map(c => { const d = new Date(c.time); return d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0'); }),
-      datasets: [{ data: candles.map(c => [Math.min(c.open??c.close,c.close), Math.max(c.open??c.close,c.close)]),
-        backgroundColor: candles.map(c => (c.close??0)>=(c.open??c.close)?'rgba(0,230,118,.65)':'rgba(255,77,109,.65)'),
-        borderColor:     candles.map(c => (c.close??0)>=(c.open??c.close)?'#00e676':'#ff4d6d'),
-        borderWidth:1, borderSkipped:false }] },
-    options: { responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{display:false}, tooltip:{backgroundColor:'#131720',borderColor:'rgba(255,255,255,.1)',borderWidth:1,titleColor:'#5a6480',bodyColor:'#e2e8f8',
-        callbacks:{label:(ctx)=>{ const c=candles[ctx.dataIndex]; return ` O:${c.open?.toFixed(3)} H:${c.high?.toFixed(3)} L:${c.low?.toFixed(3)} C:${c.close?.toFixed(3)}`; }}}},
-      scales:{ x:{ticks:{maxTicksLimit:8,color:'#5a6480',font:{size:9}},grid:{color:'rgba(255,255,255,.03)'}},
-               y:{ticks:{color:'#5a6480',font:{size:9},callback:v=>v.toFixed(2)},grid:{color:'rgba(255,255,255,.04)'},position:'right'} } }
-  });
-  setInstance(inst);
+
+  // Destroy previous instance
+  if (instance) { try { instance.destroy(); } catch(e) {} }
+
+  // Wait for DOM to be ready, then render
+  const doRender = () => {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas) return;
+    const wrap = canvas.parentElement;
+    if (!wrap || wrap.clientWidth === 0 || wrap.clientHeight === 0) {
+      setTimeout(doRender, 100);
+      return;
+    }
+    // Set explicit pixel dimensions
+    const w = wrap.clientWidth  - 24;
+    const h = wrap.clientHeight - 12;
+    canvas.width  = w;
+    canvas.height = h;
+    canvas.style.width  = w + 'px';
+    canvas.style.height = h + 'px';
+
+    const data    = buildChartData(candles);
+    data._candles = candles; // attach for tooltip
+    const options = buildChartOptions();
+    const inst    = new Chart(canvas.getContext('2d'), { type: 'bar', data, options });
+    setInstance(inst);
+  };
+
+  setTimeout(doRender, 80);
 }
 
 // ── KPI strip (desktop) ───────────────────────────────────────────────────────
