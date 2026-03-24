@@ -703,7 +703,15 @@ function buildChartData(candles) {
   };
 }
 
-function buildChartOptions() {
+function buildChartOptions(candles) {
+  // Calcola range Y dai prezzi reali con 0.5% di margine
+  const prices = candles.flatMap(c => [c.open, c.high, c.low, c.close]).filter(v => v != null);
+  const minP   = Math.min(...prices);
+  const maxP   = Math.max(...prices);
+  const margin = (maxP - minP) * 0.1 || maxP * 0.002;
+  const yMin   = +(minP - margin).toFixed(4);
+  const yMax   = +(maxP + margin).toFixed(4);
+
   return {
     responsive: true,
     maintainAspectRatio: false,
@@ -727,7 +735,13 @@ function buildChartOptions() {
     },
     scales: {
       x: { ticks: { maxTicksLimit: 8, color: '#5a6480', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' } },
-      y: { ticks: { color: '#5a6480', font: { size: 9 }, callback: v => v.toFixed(2) }, grid: { color: 'rgba(255,255,255,.04)' }, position: 'right' }
+      y: {
+        min: yMin,
+        max: yMax,
+        ticks: { color: '#5a6480', font: { size: 9 }, callback: v => v.toFixed(2) },
+        grid: { color: 'rgba(255,255,255,.04)' },
+        position: 'right'
+      }
     }
   };
 }
@@ -757,7 +771,7 @@ function renderChart(canvasId, candles, lastPrice, instance, setInstance) {
 
     const data    = buildChartData(candles);
     data._candles = candles; // attach for tooltip
-    const options = buildChartOptions();
+    const options = buildChartOptions(candles);
     const inst    = new Chart(canvas.getContext('2d'), { type: 'bar', data, options });
     setInstance(inst);
   };
