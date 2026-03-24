@@ -403,7 +403,7 @@ let ws;
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(proto + '//' + location.host);
-  ws.onopen  = () => setWsStatus('on', 'Live');
+  ws.onopen  = () => setWsStatus('connected', 'Connesso');
   ws.onclose = () => { setWsStatus('off', 'Offline'); setTimeout(connectWS, 3000); };
   ws.onmessage = (e) => {
     try {
@@ -415,16 +415,33 @@ function connectWS() {
 }
 function setWsStatus(cls, txt) {
   const p = document.getElementById('d-wsPill');
-  p.textContent = txt; p.className = 'ws-pill ws-' + cls;
+  // Se abbiamo già uno stato mercato, non sovrascrivere con 'Connesso'
+  if (cls === 'connected' && p.dataset.marketSet === 'true') return;
+  p.textContent = txt;
+  p.className = 'ws-pill ws-' + (cls === 'connected' ? 'wait' : cls);
 }
 connectWS();
 
 // ── Market status ─────────────────────────────────────────────────────────────
 function onMarketStatus(s) {
-  setWsStatus(s.open ? 'on' : 'wait', s.open ? 'Live' : 'Chiuso');
+  // Desktop pill — mostra stato mercato reale
+  const pill = document.getElementById('d-wsPill');
+  pill.dataset.marketSet = 'true';
+  if (!s.open) {
+    pill.textContent = 'Mercato chiuso';
+    pill.className   = 'ws-pill ws-wait';
+  } else if (s.premarket || s.afterhours) {
+    pill.textContent = s.premarket ? 'Pre-market' : 'After-hours';
+    pill.className   = 'ws-pill ws-wait';
+  } else {
+    pill.textContent = 'Live';
+    pill.className   = 'ws-pill ws-on';
+  }
+
+  // Mobile status
   const el = document.getElementById('m-status');
   el.textContent = s.open ? (s.premarket ? 'Pre-market' : s.afterhours ? 'After-hours' : 'Live') : 'Chiuso';
-  el.className = 'm-status ' + (s.open ? (s.premarket || s.afterhours ? 'wait' : 'on') : 'off');
+  el.className   = 'm-status ' + (s.open ? (s.premarket || s.afterhours ? 'wait' : 'on') : 'off');
 }
 
 // ── Update ────────────────────────────────────────────────────────────────────
