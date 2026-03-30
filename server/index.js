@@ -14,16 +14,36 @@ const server = http.createServer(app);
 const wss    = new WebSocket.Server({ server });
 
 const ASSETS = {
-  'NVDA':  { name:'NVIDIA',                type:'stock', region:'USA' },
-  'GOOGL': { name:'Alphabet',              type:'stock', region:'USA' },
-  'PLTR':  { name:'Palantir',              type:'stock', region:'USA' },
+  // ── Tecnologia & Semiconduttori ────────────────────────────────────────
+  'NVDA':  { name:'NVIDIA',               type:'stock', region:'USA' },
   'TSM':   { name:'Taiwan Semiconductor', type:'stock', region:'USA' },
-  'ORCL':  { name:'Oracle',               type:'stock', region:'USA' },
+  'MU':    { name:'Micron Technology',    type:'stock', region:'USA' },
   'SMCI':  { name:'Super Micro Computer', type:'stock', region:'USA' },
   'SNDK':  { name:'SanDisk',              type:'stock', region:'USA' },
+  'GOOGL': { name:'Alphabet',             type:'stock', region:'USA' },
+  'ORCL':  { name:'Oracle',               type:'stock', region:'USA' },
+  'PLTR':  { name:'Palantir',             type:'stock', region:'USA' },
+  // ── Difesa & Aerospazio ────────────────────────────────────────────────
+  'LMT':   { name:'Lockheed Martin',      type:'stock', region:'USA' },
+  'KTOS':  { name:'Kratos Defense',       type:'stock', region:'USA' },
   'RKLB':  { name:'Rocket Lab',           type:'stock', region:'USA' },
+  'AXON':  { name:'Axon Enterprise',      type:'stock', region:'USA' },
+  // ── Cybersecurity ──────────────────────────────────────────────────────
+  'CRWD':  { name:'CrowdStrike',          type:'stock', region:'USA' },
+  'S':     { name:'SentinelOne',          type:'stock', region:'USA' },
+  // ── Energia ───────────────────────────────────────────────────────────
+  'VST':   { name:'Vistra Energy',        type:'stock', region:'USA' },
+  // ── Salute & Biotech ───────────────────────────────────────────────────
+  'ISRG':  { name:'Intuitive Surgical',   type:'stock', region:'USA' },
+  'DXCM':  { name:'DexCom',              type:'stock', region:'USA' },
+  'CRSP':  { name:'CRISPR Therapeutics',  type:'stock', region:'USA' },
+  'LLY':   { name:'Eli Lilly',            type:'stock', region:'USA' },
+  'ABBV':  { name:'AbbVie',               type:'stock', region:'USA' },
+  'CELH':  { name:'Celsius Holdings',     type:'stock', region:'USA' },
+  // ── Fintech & Social ───────────────────────────────────────────────────
   'SOFI':  { name:'SoFi Technologies',    type:'stock', region:'USA' },
-  'MU':    { name:'Micron Technology',    type:'stock', region:'USA' },
+  'RDDT':  { name:'Reddit',               type:'stock', region:'USA' },
+  // ── Latam ─────────────────────────────────────────────────────────────
   'NU':    { name:'Nu Holdings (Nubank)', type:'stock', region:'Brasile' },
   'MELI':  { name:'MercadoLibre',         type:'stock', region:'Argentina' },
 };

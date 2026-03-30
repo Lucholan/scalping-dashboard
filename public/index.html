@@ -266,9 +266,9 @@ html,body{background:var(--bg0);color:var(--text);font-family:'DM Mono',monospac
     <aside class="d-sidebar">
       <div class="d-filter">
         <div class="ftag active" onclick="setFilter('all',this)">Tutti</div>
-        <div class="ftag" onclick="setFilter('stock',this)">Azioni</div>
-        <div class="ftag" onclick="setFilter('etf',this)">ETF</div>
-        <div class="ftag" onclick="setFilter('commodity',this)">Commodity</div>
+        <div class="ftag" onclick="setFilter('USA',this)">🇺🇸 USA</div>
+        <div class="ftag" onclick="setFilter('Brasile',this)">🇧🇷 BR</div>
+        <div class="ftag" onclick="setFilter('Argentina',this)">🇦🇷 AR</div>
       </div>
       <div class="d-asset-list" id="d-assetList"></div>
     </aside>
@@ -502,7 +502,7 @@ function setFilter(f, el) {
 
 function renderDSidebar() {
   const entries = Object.entries(state).filter(([,d]) =>
-    d.quote && (dFilter === 'all' || d.meta?.type === dFilter));
+    d.quote && (dFilter === 'all' || d.meta?.region === dFilter));
   document.getElementById('d-assetList').innerHTML = entries.map(([sym,d]) => {
     const c = d.quote.changePct ?? 0;
     const st = d.signal?.type ?? 'ATTENDI';
